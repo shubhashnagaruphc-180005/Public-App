@@ -1,0 +1,13 @@
+{
+  "name": "UPHC Subhash Nagar",
+  "short_name": "UPHC Subhash Nagar",
+  "description": "Free check-ups, antenatal care, immunization, lab services and assistance applications.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fdfaf4",
+  "theme_color": "#b4232a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
