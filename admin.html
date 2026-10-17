@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Requests · UPHC Subhash Nagar Admin</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --surface: #ffffff; --text: #1f2a30; --muted: #5b6770; --border: #e1e5ea;
+    --primary: #b4232a; --ok: #1d6b5a; --ok-soft: #e4f2ee; --warn: #9a5b00; --warn-soft: #fff4e0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 1.2rem; margin: 0; }
+  main { max-width: 960px; margin: 0 auto; padding: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+  input, select, button { font: inherit; }
+  input, select { padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; width: 100%; background: #fff; color: var(--text); }
+  label { display: grid; gap: 5px; font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; }
+  button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; }
+  button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  button.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+  button.danger { color: var(--primary); border-color: #f0c4c6; }
+  button:disabled { opacity: 0.55; cursor: wait; }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .toolbar select { width: auto; }
+  .stats { color: var(--muted); font-size: 0.92rem; margin-left: auto; }
+  .req { display: grid; gap: 8px; }
+  .req-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .req-name { font-weight: 700; font-size: 1.05rem; }
+  .badge { font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .pending { background: var(--warn-soft); color: var(--warn); }
+  .completed { background: var(--ok-soft); color: var(--ok); }
+  .meta { color: var(--muted); font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .details { background: #f8f9fb; border-radius: 8px; padding: 10px 12px; font-size: 0.95rem; white-space: pre-wrap; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .msg { min-height: 1.4em; font-weight: 600; font-size: 0.92rem; color: var(--primary); }
+  .empty { color: var(--muted); text-align: center; padding: 30px; }
+  .note { color: var(--muted); font-size: 0.85rem; margin: 12px 0 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Assistance requests · UPHC Subhash Nagar</h1>
+  <button id="signout" hidden>Sign out</button>
+</header>
+
+<main>
+  <section class="card" id="login">
+    <form id="login-form">
+      <label>JSONBin Bin ID <input id="bin" required autocomplete="off"></label>
+      <label>JSONBin Master Key <input id="key" type="password" required autocomplete="off"></label>
+      <button class="primary" type="submit">Load requests</button>
+      <p class="msg" id="login-msg"></p>
+    </form>
+    <p class="note">Credentials are kept in memory only and are cleared when you sign out or close the page.</p>
+  </section>
+
+  <section id="panel" hidden>
+    <div class="toolbar">
+      <button id="refresh">Refresh</button>
+      <select id="filter">
+        <option value="all">All</option>
+        <option value="pending">Pending</option>
+        <option value="completed">Completed</option>
+      </select>
+      <span class="stats" id="stats"></span>
+    </div>
+    <p class="msg" id="action-msg"></p>
+    <div id="list" class="req"></div>
+  </section>
+</main>
+
+<script>
+  const API = "https://api.jsonbin.io/v3/b/";
+  let binId = "";
+  let masterKey = "";
+  let entries = [];
+  let busy = false;
+
+  const $ = (id) => document.getElementById(id);
+
+  // Escapes user-submitted text before it is written into the page.
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function statusOf(entry) {
+    return entry.status === "completed" ? "completed" : "pending";
+  }
+
+  // Entries from the public form have no ID, so identify them by their content.
+  function sameEntry(a, b) {
+    return a.submittedAt === b.submittedAt && a.name === b.name && a.phone === b.phone;
+  }
+
+  async function readBin() {
+    const res = await fetch(`${API}${binId}/latest`, { headers: { "X-Master-Key": masterKey } });
+    if (!res.ok) throw new Error(`Could not load requests (status ${res.status}). Check the Bin ID and key.`);
+    const data = await res.json();
+    return Array.isArray(data.record) ? data.record : [];
+  }
+
+  async function writeBin(list) {
+    const res = await fetch(`${API}${binId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Master-Key": masterKey },
+      body: JSON.stringify(list)
+    });
+    if (!res.ok) throw new Error(`Could not save changes (status ${res.status}).`);
+  }
+
+  function setBusy(on) {
+    busy = on;
+    document.querySelectorAll("button").forEach((b) => {
+      if (b.id !== "signout") b.disabled = on;
+    });
+  }
+
+  function showActionError(err) {
+    $("action-msg").textContent = err.message + " Refresh and try again if needed.";
+  }
+
+  async function refresh() {
+    setBusy(true);
+    $("action-msg").textContent = "";
+    try {
+      entries = await readBin();
+      render();
+    } catch (err) {
+      showActionError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Re-reads the bin, applies one change to the matching entry, and writes the whole list back.
+  async function changeEntry(target, change) {
+    setBusy(true);
+    $("action-msg").textContent = "";
+    try {
+      const list = await readBin();
+      const i = list.findIndex((e) => sameEntry(e, target));
+      if (i < 0) throw new Error("That request is no longer in the bin.");
+      change(list, i);
+      await writeBin(list);
+      entries = list;
+      render();
+    } catch (err) {
+      showActionError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function render() {
+    const filter = $("filter").value;
+    const pending = entries.filter((e) => statusOf(e) === "pending").length;
+    $("stats").textContent = `${entries.length} total · ${pending} pending`;
+
+    const shown = entries
+      .map((entry, idx) => ({ entry, idx }))
+      .filter(({ entry }) => filter === "all" || statusOf(entry) === filter)
+      .sort((a, b) => String(b.entry.submittedAt || "").localeCompare(String(a.entry.submittedAt || "")));
+
+    if (!shown.length) {
+      $("list").innerHTML = `<p class="empty">No requests to show.</p>`;
+      return;
+    }
+
+    $("list").innerHTML = shown.map(({ entry, idx }) => {
+      const st = statusOf(entry);
+      const date = entry.submittedAt ? new Date(entry.submittedAt).toLocaleString() : "Unknown date";
+      const toggle = st === "completed"
+        ? `<button data-act="reopen" data-idx="${idx}">Mark as pending</button>`
+        : `<button class="ok" data-act="complete" data-idx="${idx}">Mark as completed</button>`;
+      return `
+        <article class="card req">
+          <div class="req-head">
+            <span class="req-name">${esc(entry.name)}</span>
+            <span class="badge ${st}">${st === "completed" ? "Completed" : "Pending"}</span>
+          </div>
+          <div class="meta">
+            <span>Phone: <a href="tel:${esc(entry.phone)}">${esc(entry.phone)}</a></span>
+            <span>Age: ${esc(entry.age || "-")}</span>
+            <span>Address: ${esc(entry.address || "-")}</span>
+            <span>Type: ${esc(entry.assistanceType || "-")}</span>
+            <span>Submitted: ${esc(date)}</span>
+          </div>
+          ${entry.details ? `<div class="details">${esc(entry.details)}</div>` : ""}
+          <div class="actions">
+            ${toggle}
+            <button class="danger" data-act="delete" data-idx="${idx}">Delete</button>
+          </div>
+        </article>`;
+    }).join("");
+  }
+
+  $("list").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-act]");
+    if (!btn || busy) return;
+    const target = entries[Number(btn.dataset.idx)];
+    if (!target) return;
+
+    switch (btn.dataset.act) {
+      case "complete":
+        changeEntry(target, (list, i) => {
+          list[i].status = "completed";
+          list[i].completedAt = new Date().toISOString();
+        });
+        break;
+      case "reopen":
+        changeEntry(target, (list, i) => {
+          list[i].status = "pending";
+          delete list[i].completedAt;
+        });
+        break;
+      case "delete":
+        if (!confirm(`Delete the request from ${target.name}? This cannot be undone.`)) return;
+        changeEntry(target, (list, i) => { list.splice(i, 1); });
+        break;
+    }
+  });
+
+  $("login-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    binId = $("bin").value.trim();
+    masterKey = $("key").value.trim();
+    $("login-msg").textContent = "Loading...";
+    setBusy(true);
+    try {
+      entries = await readBin();
+      $("login-msg").textContent = "";
+      $("key").value = "";
+      $("login").hidden = true;
+      $("panel").hidden = false;
+      $("signout").hidden = false;
+      render();
+    } catch (err) {
+      masterKey = "";
+      $("login-msg").textContent = err.message;
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  $("signout").addEventListener("click", () => {
+    binId = "";
+    masterKey = "";
+    entries = [];
+    $("bin").value = "";
+    $("key").value = "";
+    $("list").innerHTML = "";
+    $("action-msg").textContent = "";
+    $("panel").hidden = true;
+    $("login").hidden = false;
+    $("signout").hidden = true;
+  });
+
+  $("refresh").addEventListener("click", refresh);
+  $("filter").addEventListener("change", render);
+</script>
+</body>
+</html>
