@@ -98,7 +98,17 @@
   }
 
   /* Hero */
-  .hero { padding: 72px 0 56px; background: linear-gradient(180deg, var(--primary-soft), var(--bg)); }
+  .hero {
+    padding: 72px 0 56px;
+    background:
+      linear-gradient(
+        rgba(253, 250, 244, 0.78),
+        rgba(253, 250, 244, 0.88)
+      ),
+      url("9f1fae1d-c820-428c-a8b5-cec313595ff1.jpeg")
+      center / cover no-repeat;
+    background-color: var(--bg);
+  }
   .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); max-width: 18ch; }
   .hero p { color: var(--muted); font-size: 1.1rem; max-width: 56ch; }
   .badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
