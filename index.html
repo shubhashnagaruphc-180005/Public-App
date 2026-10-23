@@ -86,6 +86,12 @@
     position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
     background: var(--surface); border-bottom: 1px solid var(--border);
   }
+  .hero-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
   .nav { display: flex; align-items: center; justify-content: space-between; height: 64px; }
   .brand { font-weight: 700; text-decoration: none; color: var(--text); }
   .brand span { color: var(--primary); }
@@ -205,7 +211,7 @@
 <main id="top">
 
   <div class="hero">
-    <div src="9f1fae1d-c820-428c-a8b5-cec313595ff1.jpeg"></div>
+    <img class="hero-image" src="9f1fae1d-c820-428c-a8b5-cec313595ff1.jpeg" alt="UPHC Subhash Nagar">
     <div class="container">
       <p class="tag">Public Health Care</p>
       <h1>Quality healthcare for every family, free of cost</h1>
